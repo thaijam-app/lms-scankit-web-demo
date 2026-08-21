@@ -24,6 +24,10 @@ export interface WebScanResult {
   path: ScanPathName;
   /** 命中變體（fast 路徑為 'raw'） */
   variant: string;
+  /** 命中的那一次解碼呼叫本身的耗時（毫秒） */
+  decodeMs: number;
+  /** 畫面出現內容 → 成功解碼的總耗時（毫秒）≈「伸票到嗶聲」的體感 */
+  elapsedMs: number;
   timestamp: string;
   boardingPass?: BoardingPassData;
 }
@@ -55,6 +59,8 @@ export class LiveScanner {
   private variantRotation = 0;
   private lastHitAt = 0;
   private lastHardPathAt = 0;
+  /** 本次嘗試的起錶點：畫面從空景變成有內容的時刻（0 = 未起錶） */
+  private attemptStartAt = 0;
   private readonly recentValues = new Map<string, number>();
 
   constructor(options: LiveScannerOptions) {
@@ -185,7 +191,13 @@ export class LiveScanner {
     return Math.sqrt(Math.max(0, variance)) > 10;
   }
 
-  private emit(symbology: SymbologyName, rawValue: string, path: ScanPathName, variant: string): void {
+  private emit(
+    symbology: SymbologyName,
+    rawValue: string,
+    path: ScanPathName,
+    variant: string,
+    decodeMs: number
+  ): void {
     if (this.stopped) return;
     const context = scanContexts[this.options.context ?? 'lounge'];
     const now = Date.now();
@@ -201,6 +213,8 @@ export class LiveScanner {
       }
     }
     this.lastHitAt = now;
+    const elapsedMs = this.attemptStartAt > 0 ? now - this.attemptStartAt : decodeMs;
+    this.attemptStartAt = 0; // 本次嘗試結束，下一張票重新起錶
 
     const boardingPass = parseBCBP(rawValue) ?? undefined;
     this.options.onResult({
@@ -208,6 +222,8 @@ export class LiveScanner {
       rawValue,
       path,
       variant,
+      decodeMs: Math.round(decodeMs),
+      elapsedMs: Math.round(elapsedMs),
       timestamp: new Date(now).toISOString(),
       boardingPass
     });
@@ -221,10 +237,20 @@ export class LiveScanner {
       const image = this.grabROI();
       if (!image) return;
 
+      // 起錶／停錶：畫面從空景變有內容的瞬間開始計時（≈ 旅客伸票）
+      const structured = this.hasStructure(image);
+      if (structured && this.attemptStartAt === 0) {
+        this.attemptStartAt = Date.now();
+      } else if (!structured) {
+        this.attemptStartAt = 0;
+      }
+
       // Fast 路徑：raw 直解
+      let t0 = performance.now();
       let hits = await decodeImage(image, context.symbologies);
       if (hits.length > 0) {
-        for (const hit of hits) this.emit(hit.symbology, hit.rawValue, 'fast', 'raw');
+        const decodeMs = performance.now() - t0;
+        for (const hit of hits) this.emit(hit.symbology, hit.rawValue, 'fast', 'raw', decodeMs);
         return;
       }
 
@@ -232,25 +258,30 @@ export class LiveScanner {
       const sinceHit = now - this.lastHitAt;
 
       // 攻堅只在畫面有結構時進行：空櫃檯待機不空轉 CPU
-      if (!this.hasStructure(image)) return;
+      if (!structured) return;
 
       // 輕量攻堅：每個 tick 輪替一個前處理變體（攤平 CPU 負載）
       if (sinceHit > 400) {
         this.variantRotation = (this.variantRotation + 1) % (variants.length - 1);
         const variant = variants[this.variantRotation + 1]; // 跳過 raw
+        t0 = performance.now();
         hits = await decodeImage(variant.apply(image), context.symbologies);
         if (hits.length > 0) {
-          for (const hit of hits) this.emit(hit.symbology, hit.rawValue, 'fast', variant.name);
+          const decodeMs = performance.now() - t0;
+          for (const hit of hits) this.emit(hit.symbology, hit.rawValue, 'fast', variant.name, decodeMs);
           return;
         }
       }
 
-      // Hard Path：久攻不下時全變體＋透視盲掃——重抓「全解析度」ROI 攻堅
+      // Hard Path：久攻不下時全變體＋透視盲掃。
+      // 解析度封頂 2304（密 PDF417 夠用）＋時間預算 800ms——
+      // 全解析度不設限會在單執行緒上堵死即時掃描（v0.1.1 的教訓）
       if (sinceHit > context.hardPathTimeoutMs && now - this.lastHardPathAt > context.hardPathCooldownMs) {
         this.lastHardPathAt = now;
-        const fullRes = this.grabROI(4096) ?? image;
-        const hit = await decodeHard(fullRes, context.symbologies);
-        if (hit) this.emit(hit.symbology, hit.rawValue, 'hard', hit.variant);
+        const hiRes = this.grabROI(2304) ?? image;
+        t0 = performance.now();
+        const hit = await decodeHard(hiRes, context.symbologies, undefined, { timeBudgetMs: 800 });
+        if (hit) this.emit(hit.symbology, hit.rawValue, 'hard', hit.variant, performance.now() - t0);
       }
     } catch (error) {
       this.options.onError?.(error instanceof Error ? error : new Error(String(error)));

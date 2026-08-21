@@ -18,14 +18,25 @@ export interface HardHit {
 /** 盲掃階段只跑的精選變體（控制成本）：raw＋自適應二值化 */
 const sweepVariants = variants.filter((v) => v.name === 'raw' || v.name === 'otsu');
 
+export interface DecodeHardOptions {
+  /**
+   * 時間預算（毫秒）：超過即中止剩餘變體，避免在單執行緒上
+   * 堵死即時掃描。預設不限（benchmark 用）；LiveScanner 傳 ~800。
+   */
+  timeBudgetMs?: number;
+}
+
 export async function decodeHard(
   image: ImageDataLike,
   symbologies: SymbologyName[],
-  decode?: DecodeFn
+  decode?: DecodeFn,
+  options?: DecodeHardOptions
 ): Promise<HardHit | null> {
   const decodeFn: DecodeFn = decode ?? ((img) => decodeImage(img, symbologies));
+  const deadline = options?.timeBudgetMs !== undefined ? Date.now() + options.timeBudgetMs : Infinity;
 
   for (const variant of variants) {
+    if (Date.now() > deadline) return null;
     const hits = await decodeFn(variant.apply(image));
     const hit = hits.find((h) => symbologies.includes(h.symbology));
     if (hit) {
@@ -34,8 +45,10 @@ export async function decodeHard(
   }
 
   for (const { name, quad } of blindSweepQuads(image.width, image.height)) {
+    if (Date.now() > deadline) return null;
     const flattened = warpQuad(image, quad, image.width, image.height);
     for (const variant of sweepVariants) {
+      if (Date.now() > deadline) return null;
       const hits = await decodeFn(variant.apply(flattened));
       const hit = hits.find((h) => symbologies.includes(h.symbology));
       if (hit) {
