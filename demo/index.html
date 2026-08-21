@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1220" />
+    <title>LMSScanKit-Web 測試頁</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "lms-scankit-web": "../dist/src/index.js",
+          "zxing-wasm/reader": "../node_modules/zxing-wasm/dist/es/reader/index.js"
+        }
+      }
+    </script>
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">LMSScanKit-Web</p>
+          <h1>純 JS/WASM 條碼測試頁</h1>
+          <p class="subtitle">直接測試瀏覽器相機與單張圖片解碼，不需要殼 App 或 Scandit。</p>
+        </div>
+        <span id="sdk-status" class="status status-idle">SDK 載入中…</span>
+      </header>
+
+      <section class="workspace">
+        <section class="panel camera-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Live scanner</p>
+              <h2>相機掃描</h2>
+            </div>
+            <span id="camera-status" class="muted">尚未啟動</span>
+          </div>
+
+          <div class="camera-frame">
+            <video id="camera" autoplay muted playsinline></video>
+            <div class="scan-window" aria-hidden="true"><span></span></div>
+            <div id="camera-placeholder" class="camera-placeholder">
+              <strong>相機預覽會顯示在這裡</strong>
+              <span>請使用 localhost 或 HTTPS，瀏覽器才會允許相機權限。</span>
+            </div>
+          </div>
+
+          <div class="controls">
+            <label>
+              掃描情境
+              <select id="context">
+                <option value="lounge">lounge</option>
+                <option value="boardingPass" selected>boardingPass</option>
+                <option value="membership">membership</option>
+                <option value="baggage">baggage</option>
+              </select>
+            </label>
+            <div class="button-row">
+              <button id="start-camera" class="primary">啟動相機</button>
+              <button id="stop-camera" disabled>停止</button>
+              <button id="torch" disabled>補光燈</button>
+            </div>
+          </div>
+          <p id="camera-message" class="message" role="status"></p>
+        </section>
+
+        <section class="panel upload-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Image decode</p>
+              <h2>單張圖片</h2>
+            </div>
+          </div>
+          <p class="muted">可上傳 PNG/JPEG，或直接點下面的內建測試圖。</p>
+          <label class="file-picker">
+            <span>選擇圖片</span>
+            <input id="image-file" type="file" accept="image/png,image/jpeg,image/webp" />
+          </label>
+          <div class="fixture-list">
+            <button class="fixture" data-fixture="../fixtures/bp01-pdf417.png">測試 PDF417 登機證</button>
+            <button class="fixture" data-fixture="../fixtures/label01-qr.png">測試 QR 標籤</button>
+          </div>
+          <p id="upload-message" class="message" role="status"></p>
+        </section>
+      </section>
+
+      <section class="panel results-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Output</p>
+            <h2>掃描結果</h2>
+          </div>
+          <button id="clear-results" class="text-button">清除紀錄</button>
+        </div>
+        <div id="results" class="results-empty">尚未有結果。</div>
+      </section>
+
+      <footer class="footer">
+        <span>目前測試的是 <code>lms-scankit-web</code> 的 browser API。</span>
+        <a href="../README.md">查看 SDK README</a>
+      </footer>
+    </main>
+  </body>
+</html>

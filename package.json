@@ -1,0 +1,32 @@
+{
+  "name": "lms-scankit-web",
+  "version": "0.1.0",
+  "description": "航空條碼掃描 Web SDK——zxing-wasm 解碼核心＋LMSScanKit 策略層（ROI／前處理變體／透視盲掃／BCBP 解析），zxing-js 的直接替代品",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist/src/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test dist/test/*.test.js",
+    "bench": "tsc && node dist/bench/bench.js"
+  },
+  "keywords": ["barcode", "boarding-pass", "pdf417", "aztec", "bcbp", "zxing"],
+  "dependencies": {
+    "zxing-wasm": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.5.0"
+  }
+}
