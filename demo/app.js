@@ -24,18 +24,12 @@ const fileInput = $('#image-file');
 let scanner = null;
 let torchEnabled = false;
 
-function isWideContext() {
-  return contextSelect.value === 'boardingPass' || contextSelect.value === 'code39';
-}
-
 function scanRoi() {
-  return isWideContext()
-    ? { x: 0.03, y: 0.03, width: 0.94, height: 0.94 }
-    : { x: 0.1, y: 0.2, width: 0.8, height: 0.55 };
+  return { x: 0.1, y: 0.2, width: 0.8, height: 0.55 };
 }
 
 function updateScanGuide() {
-  cameraFrame.classList.toggle('wide-guide', isWideContext());
+  cameraFrame.classList.remove('wide-guide');
 }
 
 sdkStatus.textContent = 'SDK 已載入';
@@ -121,9 +115,7 @@ async function startCamera() {
     showCameraRunning(true);
     setMessage(
       cameraMessage,
-        isWideContext()
-        ? `${contextSelect.value === 'code39' ? 'CODE39' : 'PDF417'} 可歪斜放入大框，不必對準中間線；請保持條碼完整入鏡。`
-        : `已啟動 ${contextSelect.value} 情境；請把條碼放入框內。`
+      `已啟動 ${contextSelect.value} 情境；請將條碼完整放入藍框，盡量對準水平線。`
     );
   } catch (error) {
     scanner?.stop();

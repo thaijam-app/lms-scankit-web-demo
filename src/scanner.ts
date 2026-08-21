@@ -37,6 +37,12 @@ export interface LiveScannerOptions {
   onError?: (error: Error) => void;
   /** 逐幀解碼間隔（毫秒），預設 120 ≈ 8fps */
   tickIntervalMs?: number;
+  /**
+   * 啟動時嘗試設定的相機變焦倍率（預設 1.5，設 0 停用）。
+   * 密 PDF417 的解碼上限由「每模組像素數」決定，拉近是最有效的一招；
+   * iOS Safari 17+／Android Chrome 支援，不支援的裝置靜默略過。
+   */
+  initialZoom?: number;
 }
 
 export class LiveScanner {
@@ -62,14 +68,20 @@ export class LiveScanner {
     this.stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'environment',
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
+        // 要 4K，裝置給不了會自動降——密 PDF417 的成敗就在像素數
+        width: { ideal: 3840 },
+        height: { ideal: 2160 }
       },
       audio: false
     });
     video.srcObject = this.stream;
     video.setAttribute('playsinline', 'true'); // iOS Safari 必需
     await video.play();
+
+    const initialZoom = this.options.initialZoom ?? 1.5;
+    if (initialZoom > 0) {
+      void this.setZoom(initialZoom); // 不支援 zoom 的裝置靜默略過
+    }
 
     // 從現在起算「未命中」時間，避免啟動瞬間誤觸攻堅
     this.lastHitAt = Date.now();
@@ -101,7 +113,22 @@ export class LiveScanner {
     }
   }
 
-  private grabROI(): ImageDataLike | null {
+  /** 相機光學/感光變焦（支援度依裝置；回傳是否成功） */
+  async setZoom(factor: number): Promise<boolean> {
+    const track = this.stream?.getVideoTracks()[0];
+    if (!track || typeof track.getCapabilities !== 'function') return false;
+    const capabilities = track.getCapabilities() as { zoom?: { min: number; max: number } };
+    if (!capabilities.zoom) return false;
+    const target = Math.min(Math.max(factor, capabilities.zoom.min), capabilities.zoom.max);
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: target } as unknown as MediaTrackConstraintSet] });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private grabROI(maxWidth = 1280): ImageDataLike | null {
     const { video, roi } = this.options;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -112,8 +139,9 @@ export class LiveScanner {
     const sw = roi ? roi.width * vw : vw;
     const sh = roi ? roi.height * vh : vh;
 
-    // 上限 1280 寬：密的 PDF417 要像素，但全 4K 丟 WASM 太慢
-    const scale = Math.min(1, 1280 / sw);
+    // fast tick 用 1280 上限省 CPU；Hard Path 傳大值拿全解析度——
+    // 密 PDF417 的成敗就在每模組像素數，攻堅時一個像素都不能丟
+    const scale = Math.min(1, maxWidth / sw);
     const dw = Math.round(sw * scale);
     const dh = Math.round(sh * scale);
 
@@ -217,10 +245,11 @@ export class LiveScanner {
         }
       }
 
-      // Hard Path：久攻不下時全變體＋透視盲掃
+      // Hard Path：久攻不下時全變體＋透視盲掃——重抓「全解析度」ROI 攻堅
       if (sinceHit > context.hardPathTimeoutMs && now - this.lastHardPathAt > context.hardPathCooldownMs) {
         this.lastHardPathAt = now;
-        const hit = await decodeHard(image, context.symbologies);
+        const fullRes = this.grabROI(4096) ?? image;
+        const hit = await decodeHard(fullRes, context.symbologies);
         if (hit) this.emit(hit.symbology, hit.rawValue, 'hard', hit.variant);
       }
     } catch (error) {
