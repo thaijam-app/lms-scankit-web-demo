@@ -12,6 +12,7 @@ const cameraStatus = $('#camera-status');
 const cameraMessage = $('#camera-message');
 const uploadMessage = $('#upload-message');
 const camera = $('#camera');
+const cameraFrame = $('#camera-frame');
 const placeholder = $('#camera-placeholder');
 const contextSelect = $('#context');
 const results = $('#results');
@@ -22,6 +23,20 @@ const fileInput = $('#image-file');
 
 let scanner = null;
 let torchEnabled = false;
+
+function isWideContext() {
+  return contextSelect.value === 'boardingPass' || contextSelect.value === 'code39';
+}
+
+function scanRoi() {
+  return isWideContext()
+    ? { x: 0.03, y: 0.03, width: 0.94, height: 0.94 }
+    : { x: 0.1, y: 0.2, width: 0.8, height: 0.55 };
+}
+
+function updateScanGuide() {
+  cameraFrame.classList.toggle('wide-guide', isWideContext());
+}
 
 sdkStatus.textContent = 'SDK 已載入';
 sdkStatus.className = 'status status-ready';
@@ -97,14 +112,19 @@ async function startCamera() {
     scanner = new LiveScanner({
       video: camera,
       context: contextSelect.value,
-      roi: { x: 0.1, y: 0.2, width: 0.8, height: 0.55 },
+      roi: scanRoi(),
       tickIntervalMs: 120,
       onResult: addResult,
       onError: (error) => setMessage(cameraMessage, `掃描錯誤：${error.message}`, true),
     });
     await scanner.start();
     showCameraRunning(true);
-    setMessage(cameraMessage, `已啟動 ${contextSelect.value} 情境；請把條碼放入框內。`);
+    setMessage(
+      cameraMessage,
+        isWideContext()
+        ? `${contextSelect.value === 'code39' ? 'CODE39' : 'PDF417'} 可歪斜放入大框，不必對準中間線；請保持條碼完整入鏡。`
+        : `已啟動 ${contextSelect.value} 情境；請把條碼放入框內。`
+    );
   } catch (error) {
     scanner?.stop();
     scanner = null;
@@ -167,6 +187,7 @@ async function decodeFixture(url) {
 startButton.addEventListener('click', startCamera);
 stopButton.addEventListener('click', stopCamera);
 torchButton.addEventListener('click', toggleTorch);
+contextSelect.addEventListener('change', updateScanGuide);
 fileInput.addEventListener('change', () => {
   const [file] = fileInput.files;
   if (file) void decodeFile(file);
@@ -188,3 +209,4 @@ $('#clear-results').addEventListener('click', () => {
 });
 
 window.addEventListener('beforeunload', stopCamera);
+updateScanGuide();
