@@ -10,7 +10,7 @@ export type SymbologyName =
   | 'ean13'
   | 'interleaved2of5';
 
-export type ScanContextName = 'lounge' | 'boardingPass' | 'membership' | 'baggage';
+export type ScanContextName = 'lounge' | 'boardingPass' | 'membership' | 'baggage' | 'code39';
 
 /** 解碼命中的管線層：fast = 逐幀直解、hard = 前處理攻堅 */
 export type ScanPathName = 'fast' | 'hard';

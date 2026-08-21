@@ -33,5 +33,9 @@ export const scanContexts: Record<ScanContextName, ScanContext> = {
   baggage: {
     ...defaults,
     symbologies: ['code128', 'interleaved2of5']
+  },
+  code39: {
+    ...defaults,
+    symbologies: ['code39']
   }
 };

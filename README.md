@@ -11,7 +11,7 @@ import { LiveScanner } from 'lms-scankit-web';
 
 const scanner = new LiveScanner({
   video: document.querySelector('video'),
-  context: 'lounge',                        // lounge / boardingPass / membership / baggage
+  context: 'lounge',                         // lounge / boardingPass / membership / baggage / code39
   roi: { x: 0.1, y: 0.25, width: 0.8, height: 0.5 },  // 掃描框（可選）
   onResult: (r) => {
     console.log(r.symbology, r.rawValue, r.path, r.variant);
